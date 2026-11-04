@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Runtime data (generado por la app, no va en el repo)
+pack.json
+beatmappack.log
+
+# Carpetas de trabajo personales
+scratch/
+marathon/
+
+# IDEs
+.vscode/
+.idea/
+*.code-workspace
