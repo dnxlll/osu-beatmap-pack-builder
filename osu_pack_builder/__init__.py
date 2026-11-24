@@ -1,0 +1,1 @@
+"""osu! BeatmapPack Builder package."""

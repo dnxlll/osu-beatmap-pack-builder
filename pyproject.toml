@@ -1,0 +1,23 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.importlinter]
+root_package = "osu_pack_builder"
+
+[[tool.importlinter.contracts]]
+name = "Arquitectura en capas (UI -> Application -> Infrastructure -> Domain)"
+type = "layers"
+layers = [
+    "osu_pack_builder.ui",
+    "osu_pack_builder.application",
+    "osu_pack_builder.infrastructure",
+    "osu_pack_builder.domain",
+]
