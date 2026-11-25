@@ -1,83 +1,57 @@
 # osu! BeatmapPack Builder
 
-Aplicación de escritorio en **Python + CustomTkinter** para buscar, organizar y empaquetar beatmaps de **osu!** en un único pack listo para jugar o compartir, manteniendo consistencia en los nombres de dificultad, optimización de fondos y compatibilidad con los límites internos de osu!.
+Herramienta de escritorio para **Windows** diseñada para jugadores y mappers de **osu!** que quieren armar beatmap packs de forma rápida, ordenada y sin errores al subirlos.
 
 ![Vista previa de osu! BeatmapPack Builder](docs/preview.jpg)
 
 ---
 
-## Funcionalidades principales
+## Descarga e instalación (sin saber programar)
 
-- **Detección y búsqueda en tiempo real:**
-  - Detecta automáticamente tu carpeta `Songs` de osu! (con opción manual **"Cambiar Songs..."**).
-  - Buscador instantáneo multi-palabra para seleccionar tanto la carpeta base (`init_file`) como los mapas que quieres añadir al pack.
-- **Clasificación por patrón (Jacks / Anchor):**
-  - Etiquetado por patrón: **DJ** (Dense Jack), **CJ** (Chordjack), **SJ** (Speedjack) y **ANCHOR**.
-  - Sugerencia automática basada en el nombre de la dificultad y diálogo modal rápido si no se ha seleccionado ninguno.
-- **Galería visual de fichas (Split-View responsivo):**
-  - Panel derecho adaptable de **1 a 3 columnas** según el tamaño de la ventana, mostrando la miniatura del fondo (`.jpg`, `.jpeg`, `.png`, `.webp`), el audio asociado, el patrón y una vista previa del nombre final.
-  - Barra superior con contadores y **filtro rápido por patrón**.
-- **Edición y gestión directa del pack:**
-  - Botón **`✎`** en cada ficha para cambiar la dificultad `.osu` (actualizando automáticamente el audio y la imagen), el patrón o la versión parafraseada sin tener que borrar y volver a añadir el mapa.
-  - Botón **`✕`** para quitar mapas individuales o **"Vaciar"** para reiniciar `pack.json`.
-- **Cortador de nombre de dificultad:**
-  - Permite elegir cuántas palabras del título conservar (**1 palabra**, **2 palabras**, **3 palabras** o **Completo**) con vista previa en vivo (`→ ...`) y opción para aplicarlo a todo el pack o solo a los mapas sin versión manual.
-- **Generación segura y optimizada del pack:**
-  - Limpieza automática de menciones de BPM y OD conservando rates (ej. `1.1x`, `0.95x`).
-  - Diálogo interactivo de **parafraseo** si el nombre del archivo `.osu` supera los 160 caracteres seguros para osu!.
-  - Truncado automático de `Tags:` (>850 caracteres) y `BeatmapID: 0`.
-  - Conversión y redimensionado de imágenes de fondo a JPEG optimizado (máx. `1920x1080`, calidad `85`) con Pillow y renombrado sin colisiones para audios e imágenes.
-  - Persistencia atómica en `pack.json` para evitar corrupción de datos.
+1. Ve a la sección de [**Releases**](https://github.com/dnxlll/osu-beatmap-pack-builder/releases/latest).
+2. Descarga el archivo **`osu-beatmap-pack-builder.exe`**.
+3. Ábrelo con doble clic.
+   - *(Si Windows SmartScreen muestra un aviso porque es una app indie sin firma digital, pulsa **Más información → Ejecutar de todas formas**).*
+4. **Actualizaciones automáticas:** cuando salga una nueva versión, verás el botón verde **`⬆ Instalar vX.Y.Z`** arriba a la derecha; al pulsarlo, la app se actualiza y reinicia sola.
 
 ---
 
-## Instalación y uso
+## ¿Qué hace esta app?
 
-### 1. Clonar e instalar dependencias
-```powershell
-git clone https://github.com/dnxlll/osu-beatmap-pack-builder.git
-cd osu-beatmap-pack-builder
-
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-### 2. Ejecutar la aplicación
-```powershell
-python main.py
-```
-
-### 3. Flujo básico dentro de la app
-1. **Carpeta Base (`init_file`):** busca o examina la carpeta destino donde se generará el pack y selecciona el `.osu` base.
-2. **Buscar y Añadir Mapas:** busca canciones en `Songs`, elige la dificultad `.osu`, asigna el patrón y haz clic en **"+ Añadir Dificultad al Pack"**.
-3. **Cortador de Nombre (opcional):** ajusta si quieres 1, 2, 3 palabras o el título completo.
-4. **Generar Pack:** pulsa **"⚡ Generar Pack de Mapas Final"** para copiar audios, optimizar fondos y crear los archivos `.osu` adaptados en la carpeta base.
+- **Detecta tu carpeta `Songs` automáticamente** (y te permite cambiarla con **"Cambiar Songs..."** si tienes osu! en otro disco).
+- **Buscador instantáneo:** encuentra mapas por artista, título, mapper o ID, o **arrastra la carpeta del mapa** directamente a la app.
+- **Clasificación por patrón:** etiqueta tus mapas como **DJ** (Dense Jack), **CJ** (Chordjack), **SJ** (Speedjack) o **ANCHOR**, con detección automática sugerida.
+- **Galería visual de fichas:** mira cada mapa con su imagen de fondo, audio, patrón y vista previa del nombre final. Puedes **editar (`✎`)**, **quitar (`✕`)** o **filtrar por patrón** en cualquier momento.
+- **Cortador de nombre:** elige si el título se recorta a **1 palabra**, **2 palabras**, **3 palabras** o **Completo**, con vista previa en vivo.
+- **Limpieza y optimización automática para osu!:**
+  - Elimina menciones de BPM/OD conservando rates (ej. `1.1x`, `0.95x`).
+  - Optimiza imágenes de fondo a JPEG (máx. 1080p) para mantener el peso del pack bajo.
+  - Trunca `Tags:` (>850 caracteres) y te avisa si un nombre supera los 160 caracteres para acortarlo fácilmente.
 
 ---
 
-## Estructura del proyecto
+## Cómo crear tu primer Beatmap Pack (paso a paso)
 
-```text
-osu_pack_builder/
-├── domain/          # Reglas puras (modelos, limpieza BPM/OD, parsing y generación de .osu)
-├── application/     # Casos de uso (añadir, editar, eliminar y generar pack)
-├── infrastructure/  # Persistencia atómica (pack.json), Pillow y escáner de Songs
-└── ui/              # Interfaz gráfica en CustomTkinter (componentes, diálogos y tema)
-main.py              # Composition root y punto de entrada
-tests/               # Suite de pruebas unitarias y de integración (pytest)
-```
+### 1. Crea tu mapa base (`init_file`) en osu!
+El `init_file` es un mapa plantilla que define el **Título del pack, Artista, Creador, Tags** y la **carpeta destino**.
+1. En la sección **1. Carpeta Base**, pulsa **`⬇ MARATHON.mp3 (10m)`** y guarda el audio.
+2. Arrastra ese `MARATHON.mp3` dentro de **osu!** para crear un mapa nuevo.
+3. En el editor de osu!, llena los metadatos de tu pack (*Title, Artist, Creator, Tags*), ponle a la dificultad el nombre **`delete`** y guarda (**`Ctrl + S`**).
 
----
+### 2. Selecciona la Carpeta Base en la app
+1. En **1. Carpeta Base (`init_file`)**, busca la carpeta que acabas de crear (o usa **Examinar...**).
+2. Si tiene varios `.osu`, selecciona tu plantilla `delete`.
 
-## Desarrollo y pruebas
+### 3. Añade tus mapas
+1. En **2. Buscar y Añadir Mapas**, busca una canción o arrastra su carpeta al panel.
+2. Elige la dificultad `.osu`, selecciona el patrón (**DJ**, **CJ**, **SJ**, **ANCHOR** o Ninguno) y pulsa **"+ Añadir Dificultad al Pack"**.
+3. Ajusta el **Cortador de Nombre** si quieres títulos más cortos o completos.
 
-```powershell
-pip install -r requirements-dev.txt
-pytest -v
-ruff check .
-lint-imports
-```
+### 4. Genera el Pack
+1. Pulsa **"⚡ Generar Pack de Mapas Final"**.
+2. Al terminar, abre **osu!** (pulsa **`F5`** si es necesario para recargar) y borra la dificultad plantilla `delete` dentro del juego.
+
+> Dentro de la app también tienes el botón **`? Guía`** arriba a la derecha para consultar estos pasos en cualquier momento.
 
 ---
 
