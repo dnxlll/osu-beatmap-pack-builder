@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -337,3 +338,76 @@ class TitleCutterScopeDialog(QDialog):
     def _select(self, mode: str) -> None:
         self.resultado = mode
         self.accept()
+
+
+class GuideDialog(QDialog):
+    """Step-by-step beginner guide explaining init_file and pack creation."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Guía: Cómo crear tu Beatmap Pack")
+        self.setMinimumSize(580, 520)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 14)
+        layout.setSpacing(10)
+
+        title = QLabel("📖 Guía paso a paso — Cómo crear tu Beatmap Pack")
+        title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        layout.addWidget(title)
+
+        browser = QTextBrowser()
+        browser.setStyleSheet(
+            "background-color: #1C1F24; color: #EAECEF; border: 1px solid #2B303A; "
+            "border-radius: 8px; padding: 12px; font-size: 13px;"
+        )
+        browser.setHtml(
+            """
+            <h3 style="color:#4DA3E8; margin-top:0;">¿Qué es el <code>init_file</code> (Carpeta Base)?</h3>
+            <p>Es un mapa plantilla en tu carpeta de osu! que define el <b>Título del Pack,
+            Artista, Creador, Tags</b> y la <b>carpeta destino</b> donde se guardarán
+            todas las dificultades del pack.</p>
+
+            <h3 style="color:#2FA572;">Paso 1 — Crear tu <code>init_file</code> en osu!</h3>
+            <ol>
+              <li>Pulsa <b>⬇ MARATHON.mp3 (10m)</b> en la sección 1 y guarda el audio.</li>
+              <li>Arrastra ese <code>MARATHON.mp3</code> dentro de <b>osu!</b> para crear un mapa nuevo.</li>
+              <li>En el editor, llena los metadatos del pack (<i>Title, Artist, Creator, Tags</i>),
+                  pon una dificultad llamada por ejemplo <code>delete</code> y guarda (<b>Ctrl+S</b>).</li>
+            </ol>
+
+            <h3 style="color:#2FA572;">Paso 2 — Seleccionar la Carpeta Base</h3>
+            <ol>
+              <li>En <b>1. Carpeta Base (init_file)</b>, busca esa carpeta en <i>Songs</i>
+                  (o usa <b>Examinar...</b>).</li>
+              <li>Si tiene varios archivos <code>.osu</code>, selecciona tu plantilla.</li>
+            </ol>
+
+            <h3 style="color:#2FA572;">Paso 3 — Añadir y organizar tus mapas</h3>
+            <ol>
+              <li>En <b>2. Buscar y Añadir Mapas</b>, busca canciones en <i>Songs</i>
+                  (o arrastra la carpeta del mapa directamente al panel).</li>
+              <li>Elige la dificultad <code>.osu</code>, selecciona el patrón
+                  (<b>DJ</b>, <b>CJ</b>, <b>SJ</b>, <b>ANCHOR</b>) y pulsa
+                  <b>+ Añadir Dificultad al Pack</b>.</li>
+              <li>Usa las fichas de la derecha para editar (<b>✎</b>), quitar (<b>✕</b>)
+                  o filtrar por patrón, y ajusta el <b>Cortador de Nombre</b> si lo deseas.</li>
+            </ol>
+
+            <h3 style="color:#2FA572;">Paso 4 — Generar el Pack</h3>
+            <ol>
+              <li>Pulsa <b>⚡ Generar Pack de Mapas Final</b>.</li>
+              <li>Si algún nombre supera los 125 caracteres seguros para osu!,
+                  se abrirá un cuadro para acortarlo.</li>
+              <li>Al terminar, abre <b>osu!</b> (pulsa <b>F5</b> si hace falta) y borra
+                  la dificultad plantilla <code>delete</code> dentro del juego.</li>
+            </ol>
+            """
+        )
+        layout.addWidget(browser, 1)
+
+        btn_close = QPushButton("Entendido")
+        btn_close.setObjectName("PrimaryBtn")
+        btn_close.setMinimumHeight(34)
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close, alignment=Qt.AlignmentFlag.AlignRight)

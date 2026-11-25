@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from osu_pack_builder.ui.dialogs import GuideDialog
 from osu_pack_builder.ui.theme import COLOR_ACCENT_BLUE
 
 
@@ -29,6 +30,11 @@ class SongsHeader(QWidget):
         top_row.addWidget(title)
         top_row.addStretch()
 
+        btn_guide = QPushButton("? Guía")
+        btn_guide.setToolTip("Cómo crear tu beatmap pack paso a paso")
+        btn_guide.clicked.connect(self._open_guide)
+        top_row.addWidget(btn_guide)
+
         btn_change = QPushButton("Cambiar Songs...")
         btn_change.setObjectName("PrimaryBtn")
         btn_change.clicked.connect(on_change_songs)
@@ -43,3 +49,6 @@ class SongsHeader(QWidget):
     def update_songs_info(self, songs_dir: Path, map_count: int) -> None:
         """Refresh displayed Songs directory path and folder count."""
         self.lbl_songs_dir.setText(f"📁 Songs: {songs_dir} ({map_count} carpetas)")
+
+    def _open_guide(self) -> None:
+        GuideDialog(self).exec()
