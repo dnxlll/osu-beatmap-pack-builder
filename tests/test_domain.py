@@ -94,7 +94,7 @@ class TestOsuFileDomain:
         long_tags = "Tags:" + " ".join(f"tag{i}" for i in range(250))
         truncated = truncate_tags_line(long_tags)
         assert truncated.startswith("Tags:")
-        assert len(truncated) <= 900
+        assert len(truncated) <= 850
 
     def test_build_adapted_osu_content_inserts_bg_when_missing(self) -> None:
         base = "osu file format v14\n[Metadata]\nBeatmapID:123\nVersion:old\n[Events]\n"

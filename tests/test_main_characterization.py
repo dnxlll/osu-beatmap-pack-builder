@@ -160,4 +160,4 @@ class TestAddMapAndInitCreateMap:
             assert bg_out.size == (1920, 1080)
 
         tags_line = next(line for line in content.splitlines() if line.startswith("Tags:"))
-        assert len(tags_line) <= 900
+        assert len(tags_line) <= 850

@@ -112,7 +112,7 @@ class ParafraseoDialog(QDialog):
         layout.addWidget(title)
 
         desc = QLabel(
-            "El nombre sumado al prefijo del pack supera los 125 caracteres seguros para osu!.\n"
+            f"El nombre sumado al prefijo del pack supera los {max_len} caracteres seguros para osu!.\n"
             "Por favor, parafrasea o acorta el nombre de esta dificultad."
         )
         desc.setAlignment(Qt.AlignmentFlag.AlignCenter)

@@ -24,8 +24,8 @@ Aplicación de escritorio en **Python + CustomTkinter** para buscar, organizar y
   - Permite elegir cuántas palabras del título conservar (**1 palabra**, **2 palabras**, **3 palabras** o **Completo**) con vista previa en vivo (`→ ...`) y opción para aplicarlo a todo el pack o solo a los mapas sin versión manual.
 - **Generación segura y optimizada del pack:**
   - Limpieza automática de menciones de BPM y OD conservando rates (ej. `1.1x`, `0.95x`).
-  - Diálogo interactivo de **parafraseo** si el nombre del archivo `.osu` supera los 125 caracteres seguros para osu!.
-  - Truncado automático de `Tags:` (>900 caracteres) y `BeatmapID: 0`.
+  - Diálogo interactivo de **parafraseo** si el nombre del archivo `.osu` supera los 160 caracteres seguros para osu!.
+  - Truncado automático de `Tags:` (>850 caracteres) y `BeatmapID: 0`.
   - Conversión y redimensionado de imágenes de fondo a JPEG optimizado (máx. `1920x1080`, calidad `85`) con Pillow y renombrado sin colisiones para audios e imágenes.
   - Persistencia atómica en `pack.json` para evitar corrupción de datos.
 

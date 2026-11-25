@@ -6,9 +6,9 @@ VALID_PATTERNS: tuple[str, ...] = ("DJ", "CJ", "SJ", "ANCHOR")
 AUDIO_EXTENSIONS: tuple[str, ...] = (".mp3", ".ogg", ".wav")
 IMAGE_EXTENSIONS: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp")
 
-MAX_OSU_FILENAME_LEN: int = 125
-MAX_OSU_TAGS_LINE_LEN: int = 900
-MAX_OSU_TAGS_BODY_LEN: int = 850
+MAX_OSU_FILENAME_LEN: int = 160
+MAX_OSU_TAGS_LINE_LEN: int = 850
+MAX_OSU_TAGS_BODY_LEN: int = 800
 
 PACK_METADATA_FIELDS: tuple[str, ...] = (
     "Title",
