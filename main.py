@@ -4,17 +4,20 @@ Composition root and backwards-compatible entry point.
 """
 
 import logging
+import sys
 from pathlib import Path
 
-import customtkinter as ctk
+from PySide6.QtWidgets import QApplication
 
 from osu_pack_builder.application.add_map import add_map_to_pack as _app_add_map_to_pack
 from osu_pack_builder.application.generate_pack import generate_pack as _app_generate_pack
 from osu_pack_builder.domain.naming import detectar_patron_sugerido, limpiar_bpm_od
+from osu_pack_builder.infrastructure.app_paths import get_log_file, get_pack_file
 from osu_pack_builder.infrastructure.pack_repository import PackRepository
 from osu_pack_builder.ui.app import BeatmapPackApp
+from osu_pack_builder.ui.theme import APP_QSS
 
-PACK_FILE: Path = Path(__file__).parent / "pack.json"
+PACK_FILE: Path = get_pack_file()
 DEFAULT_CREATOR: str = ""
 
 __all__ = [
@@ -75,19 +78,22 @@ def init_create_map(
 
 
 def main() -> None:
-    """Configure logging and CustomTkinter, wire dependencies, and run the GUI."""
+    """Configure logging and Qt application, wire dependencies, and run the GUI."""
     logging.basicConfig(
-        filename=str(Path(__file__).parent / "beatmappack.log"),
+        filename=str(get_log_file()),
         level=logging.WARNING,
         format="%(asctime)s [%(levelname)s] %(message)s",
         encoding="utf-8",
     )
-    ctk.set_appearance_mode("dark")
-    ctk.set_default_color_theme("blue")
+
+    qt_app = QApplication(sys.argv)
+    qt_app.setStyle("Fusion")
+    qt_app.setStyleSheet(APP_QSS)
 
     repository = PackRepository(PACK_FILE)
-    app = BeatmapPackApp(repository=repository, default_creator=DEFAULT_CREATOR)
-    app.mainloop()
+    window = BeatmapPackApp(repository=repository, default_creator=DEFAULT_CREATOR)
+    window.show()
+    sys.exit(qt_app.exec())
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from osu_pack_builder.infrastructure.app_paths import get_app_data_dir, get_log_file, get_pack_file
 from osu_pack_builder.infrastructure.media_processor import copy_audio, load_thumbnail, optimize_background
 from osu_pack_builder.infrastructure.pack_repository import PackRepository
 from osu_pack_builder.infrastructure.songs_scanner import filter_song_folders, list_song_folders
@@ -83,3 +84,23 @@ class TestSongsScanner:
         matches = filter_song_folders(folders, "kobaryo book")
         assert [f.name for f in matches] == ["123 Kobaryo - Bookmaker"]
         assert filter_song_folders(folders, "   ") == []
+
+
+class TestAppPaths:
+    def test_dev_mode_uses_project_root(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delattr("sys.frozen", raising=False)
+        data_dir = get_app_data_dir()
+        assert (data_dir / "main.py").exists()
+        assert get_pack_file() == data_dir / "pack.json"
+        assert get_log_file() == data_dir / "beatmappack.log"
+
+    def test_frozen_mode_uses_localappdata(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr("sys.frozen", True, raising=False)
+        monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+        data_dir = get_app_data_dir("test-osu-pack")
+        assert data_dir == tmp_path / "test-osu-pack"
+        assert data_dir.exists()

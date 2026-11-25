@@ -22,3 +22,9 @@ marathon/
 .vscode/
 .idea/
 *.code-workspace
+
+# PyInstaller build artifacts
+build/
+dist/
+.pytest_cache/
+.ruff_cache/

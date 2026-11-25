@@ -1,10 +1,24 @@
-"""Main CustomTkinter application window with 2-column split-view layout."""
+"""Main PySide6 application window with 2-column split-view and background generation."""
 
 import logging
+import threading
 from pathlib import Path
-from tkinter import filedialog, messagebox
 
-import customtkinter as ctk
+from PySide6.QtCore import QThread, Signal
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from osu_pack_builder.application.add_map import add_map_to_pack
 from osu_pack_builder.application.generate_pack import generate_pack
@@ -29,7 +43,6 @@ from osu_pack_builder.ui.dialogs import (
     PatronModalDialog,
     TitleCutterScopeDialog,
 )
-from osu_pack_builder.ui.theme import COLOR_PRIMARY, COLOR_PRIMARY_HOVER
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +54,62 @@ _TITLE_WORD_OPTIONS: dict[str, int | None] = {
 }
 
 
-class BeatmapPackApp(ctk.CTk):
-    """Main GUI orchestrating the 2-column split-view beatmap pack workflow."""
+class _GeneratePackWorker(QThread):
+    """Background worker running generate_pack without freezing the Qt event loop."""
+
+    paraphrase_requested = Signal(str, str, str, str)
+    finished_ok = Signal(object, int)
+    failed = Signal(str)
+
+    def __init__(
+        self,
+        init_file: Path,
+        repository: PackRepository,
+        default_creator: str,
+        title_words: int | None,
+    ) -> None:
+        super().__init__()
+        self._init_file = init_file
+        self._repository = repository
+        self._default_creator = default_creator
+        self._title_words = title_words
+        self._reply_event = threading.Event()
+        self._reply_value: str = ""
+
+    def provide_paraphrase_reply(self, value: str) -> None:
+        """Supply the user's paraphrased name from the GUI thread and resume."""
+        self._reply_value = value
+        self._reply_event.set()
+
+    def _ask_paraphrase(
+        self,
+        indice: str,
+        clave_osu: str,
+        version_original: str,
+        prefix_base: str,
+    ) -> str:
+        self._reply_event.clear()
+        self.paraphrase_requested.emit(indice, clave_osu, version_original, prefix_base)
+        self._reply_event.wait()
+        return self._reply_value
+
+    def run(self) -> None:
+        try:
+            out_dir, count = generate_pack(
+                self._init_file,
+                repository=self._repository,
+                callback_parafraseo=self._ask_paraphrase,
+                default_creator=self._default_creator,
+                title_words=self._title_words,
+            )
+            self.finished_ok.emit(out_dir, count)
+        except Exception as exc:
+            logger.exception("Error inesperado al generar el pack")
+            self.failed.emit(str(exc))
+
+
+class BeatmapPackApp(QMainWindow):
+    """Main PySide6 window orchestrating the 2-column split-view beatmap pack workflow."""
 
     def __init__(self, repository: PackRepository, default_creator: str = "") -> None:
         super().__init__()
@@ -50,16 +117,16 @@ class BeatmapPackApp(ctk.CTk):
         self.repository = repository
         self.default_creator = default_creator
 
-        self.title("osu! BeatmapPack Builder")
-        self.geometry("980x700")
-        self.minsize(860, 600)
-        self.resizable(True, True)
+        self.setWindowTitle("osu! BeatmapPack Builder")
+        self.resize(1060, 740)
+        self.setMinimumSize(900, 620)
 
         self.songs_dir: Path = detect_songs_dir()
-        self._current_title_words_label: str = "1 palabra"
         self.carpetas_songs: list[Path] = []
-        self._cargar_indice_songs()
+        self._current_title_words_label: str = "1 palabra"
+        self._worker: _GeneratePackWorker | None = None
 
+        self._cargar_indice_songs()
         self._build_layout()
         self._refresh_pack_list()
 
@@ -68,7 +135,8 @@ class BeatmapPackApp(ctk.CTk):
             self.carpetas_songs = list_song_folders(self.songs_dir)
         except OSError as exc:
             logger.error("No se pudo leer el directorio Songs: %s", exc)
-            messagebox.showwarning(
+            QMessageBox.warning(
+                self,
                 "Error al leer Songs",
                 f"No se pudo leer el directorio Songs:\n{exc}\n\n"
                 "Usa 'Cambiar Songs...' para seleccionar otro.",
@@ -76,85 +144,111 @@ class BeatmapPackApp(ctk.CTk):
             self.carpetas_songs = []
 
     def _build_layout(self) -> None:
+        central = QWidget()
+        self.setCentralWidget(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(16, 10, 16, 14)
+        root.setSpacing(10)
+
         self.header = SongsHeader(
-            self,
             songs_dir=self.songs_dir,
             map_count=len(self.carpetas_songs),
             on_change_songs=self._cambiar_directorio_songs,
         )
-        self.header.pack(fill="x", padx=16, pady=(6, 8))
+        root.addWidget(self.header)
 
-        workspace = ctk.CTkFrame(self, fg_color="transparent")
-        workspace.pack(fill="both", expand=True, padx=16, pady=(0, 12))
-        workspace.grid_columnconfigure(0, weight=0, minsize=430)
-        workspace.grid_columnconfigure(1, weight=1)
-        workspace.grid_rowconfigure(0, weight=1)
+        workspace = QHBoxLayout()
+        workspace.setSpacing(14)
+        root.addLayout(workspace, 1)
 
-        # Left column: fixed comfortable width; Right column expands in fullscreen
-        left_col = ctk.CTkScrollableFrame(workspace, fg_color="transparent", width=430)
-        left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        # Left column: fixed comfortable width inside a clean scroll area
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setFixedWidth(445)
+        left_host = QWidget()
+        left_host.setStyleSheet("background: transparent;")
+        left_layout = QVBoxLayout(left_host)
+        left_layout.setContentsMargins(0, 0, 6, 0)
+        left_layout.setSpacing(10)
 
-        self.base_panel = BaseMapPanel(left_col, get_folders=lambda: self.carpetas_songs)
-        self.base_panel.pack(fill="x", pady=(0, 10))
+        self.base_panel = BaseMapPanel(get_folders=lambda: self.carpetas_songs)
+        left_layout.addWidget(self.base_panel)
 
         self.add_panel = AddMapPanel(
-            left_col,
             get_folders=lambda: self.carpetas_songs,
             on_add_map=self._handle_add_map,
         )
-        self.add_panel.pack(fill="x", pady=(0, 10))
+        left_layout.addWidget(self.add_panel)
 
-        cutter_frame = ctk.CTkFrame(left_col)
-        cutter_frame.pack(fill="x")
+        cutter_card = QFrame()
+        cutter_card.setObjectName("PanelCard")
+        cutter_layout = QVBoxLayout(cutter_card)
+        cutter_layout.setContentsMargins(14, 12, 14, 12)
+        cutter_layout.setSpacing(8)
 
-        ctk.CTkLabel(
-            cutter_frame,
-            text="3. Cortador de Nombre de Dificultad",
-            font=ctk.CTkFont(size=14, weight="bold"),
-        ).pack(anchor="w", padx=14, pady=(10, 4))
+        cutter_title = QLabel("3. Cortador de Nombre de Dificultad")
+        cutter_title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        cutter_layout.addWidget(cutter_title)
 
-        self.seg_title_words = ctk.CTkSegmentedButton(
-            cutter_frame,
-            values=list(_TITLE_WORD_OPTIONS.keys()),
-            height=30,
-            command=self._on_title_words_change,
-        )
-        self.seg_title_words.set("1 palabra")
-        self.seg_title_words.pack(fill="x", padx=14, pady=(0, 12))
+        self.title_words_group = QButtonGroup(self)
+        self.title_words_group.setExclusive(True)
+        self._title_word_buttons: dict[str, QPushButton] = {}
+        row_cutter = QHBoxLayout()
+        row_cutter.setSpacing(6)
+        for label in _TITLE_WORD_OPTIONS:
+            btn = QPushButton(label)
+            btn.setObjectName("SegmentedBtn")
+            btn.setCheckable(True)
+            btn.setChecked(label == "1 palabra")
+            btn.clicked.connect(lambda _=False, lbl=label: self._on_title_words_change(lbl))
+            self.title_words_group.addButton(btn)
+            self._title_word_buttons[label] = btn
+            row_cutter.addWidget(btn)
+        cutter_layout.addLayout(row_cutter)
+        left_layout.addWidget(cutter_card)
+        left_layout.addStretch()
 
-        # Right column: Pack list + Generate button
-        right_col = ctk.CTkFrame(workspace, fg_color="transparent")
-        right_col.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        left_scroll.setWidget(left_host)
+        workspace.addWidget(left_scroll)
+
+        # Right column: expanding pack gallery + progress bar + generate button
+        right_col = QVBoxLayout()
+        right_col.setSpacing(10)
 
         self.pack_panel = PackListPanel(
-            right_col,
             on_remove_map=self._handle_remove_map,
-            on_edit_map=self._handle_edit_map,
             on_clear_pack=self._handle_clear_pack,
+            on_edit_map=self._handle_edit_map,
             get_songs_dir=lambda: self.songs_dir,
         )
-        self.pack_panel.pack(fill="both", expand=True, pady=(0, 10))
+        right_col.addWidget(self.pack_panel, 1)
 
-        ctk.CTkButton(
-            right_col,
-            text="⚡ Generar Pack de Mapas Final",
-            font=ctk.CTkFont(size=15, weight="bold"),
-            height=46,
-            fg_color=COLOR_PRIMARY,
-            hover_color=COLOR_PRIMARY_HOVER,
-            command=self._generar_pack_final,
-        ).pack(fill="x")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.hide()
+        right_col.addWidget(self.progress_bar)
+
+        self.btn_generate = QPushButton("⚡ Generar Pack de Mapas Final")
+        self.btn_generate.setObjectName("PrimaryBtn")
+        self.btn_generate.setMinimumHeight(46)
+        self.btn_generate.setStyleSheet("font-size: 15px; font-weight: bold;")
+        self.btn_generate.clicked.connect(self._generar_pack_final)
+        right_col.addWidget(self.btn_generate)
+
+        workspace.addLayout(right_col, 1)
 
     def _on_title_words_change(self, selection: str) -> None:
+        if selection == self._current_title_words_label:
+            return
+
         pack = self.repository.load()
         manual_count = sum(
             1 for m in pack.values() if isinstance(m, dict) and m.get("__custom_version__")
         )
         if manual_count > 0:
             dialogo = TitleCutterScopeDialog(self, selection_label=selection, manual_count=manual_count)
-            self.wait_window(dialogo)
-            if dialogo.resultado is None:
-                self.seg_title_words.set(self._current_title_words_label)
+            if dialogo.exec() != TitleCutterScopeDialog.DialogCode.Accepted or not dialogo.resultado:
+                self._title_word_buttons[self._current_title_words_label].setChecked(True)
                 return
             if dialogo.resultado == "all":
                 pack = clear_custom_versions(self.repository)
@@ -165,7 +259,7 @@ class BeatmapPackApp(ctk.CTk):
             self.pack_panel.render_pack(pack)
 
     def _cambiar_directorio_songs(self) -> None:
-        nueva_ruta = filedialog.askdirectory(title="Selecciona tu carpeta Songs de osu!")
+        nueva_ruta = QFileDialog.getExistingDirectory(self, "Selecciona tu carpeta Songs de osu!")
         if nueva_ruta:
             self.songs_dir = Path(nueva_ruta)
             self._cargar_indice_songs()
@@ -181,8 +275,7 @@ class BeatmapPackApp(ctk.CTk):
         if not patron_actual or patron_actual == "Ninguno":
             sugerido = detectar_patron_sugerido(osu_elegido.name)
             dialogo = PatronModalDialog(self, map_name=osu_elegido.name, sugerido=sugerido)
-            self.wait_window(dialogo)
-            if dialogo.resultado is None:
+            if dialogo.exec() != PatronModalDialog.DialogCode.Accepted or dialogo.resultado is None:
                 return False
             patron_actual = dialogo.resultado
 
@@ -197,15 +290,15 @@ class BeatmapPackApp(ctk.CTk):
                 custom_version=version_personalizada,
             )
             tag_msg = f" [{patron_para_guardar}]" if patron_para_guardar else ""
-            messagebox.showinfo(
-                "Éxito", f"Dificultad{tag_msg} agregada al pack con índice '{indice}'."
+            QMessageBox.information(
+                self, "Éxito", f"Dificultad{tag_msg} agregada al pack con índice '{indice}'."
             )
             self.pack_panel.render_pack(pack)
             return True
         except Exception as exc:
             logger.exception("Error al agregar mapa al pack")
-            messagebox.showerror(
-                "Error al guardar", f"Ocurrió un error al procesar el mapa:\n{exc}"
+            QMessageBox.critical(
+                self, "Error al guardar", f"Ocurrió un error al procesar el mapa:\n{exc}"
             )
             return False
 
@@ -220,8 +313,7 @@ class BeatmapPackApp(ctk.CTk):
         folder: Path | None = None
 
         if osu_key:
-            candidate_osu = Path(mapa[osu_key])
-            candidate_dir = candidate_osu.parent
+            candidate_dir = Path(mapa[osu_key]).parent
             if not candidate_dir.exists():
                 fallback_dir = self.songs_dir / candidate_dir.name
                 if fallback_dir.exists():
@@ -253,8 +345,7 @@ class BeatmapPackApp(ctk.CTk):
             current_custom_version=current_custom,
             suggested_version=suggested_version,
         )
-        self.wait_window(dialogo)
-        if dialogo.resultado is None:
+        if dialogo.exec() != EditMapDialog.DialogCode.Accepted or dialogo.resultado is None:
             return
 
         selected_osu, new_pattern, new_custom = dialogo.resultado
@@ -270,7 +361,7 @@ class BeatmapPackApp(ctk.CTk):
             self.pack_panel.render_pack(updated_pack)
         except Exception as exc:
             logger.exception("Error al editar mapa #%s", indice)
-            messagebox.showerror("Error al editar", f"No se pudo actualizar el mapa:\n{exc}")
+            QMessageBox.critical(self, "Error al editar", f"No se pudo actualizar el mapa:\n{exc}")
 
     def _handle_remove_map(self, indice: str) -> None:
         try:
@@ -278,69 +369,96 @@ class BeatmapPackApp(ctk.CTk):
             self.pack_panel.render_pack(pack)
         except OSError as exc:
             logger.exception("Error al eliminar mapa #%s", indice)
-            messagebox.showerror("Error", f"No se pudo eliminar el mapa:\n{exc}")
+            QMessageBox.critical(self, "Error", f"No se pudo eliminar el mapa:\n{exc}")
 
     def _handle_clear_pack(self) -> None:
-        if not messagebox.askyesno("Confirmar", "¿Seguro que deseas vaciar pack.json?"):
+        reply = QMessageBox.question(
+            self, "Confirmar", "¿Seguro que deseas vaciar pack.json?"
+        )
+        if reply != QMessageBox.StandardButton.Yes:
             return
         try:
             self.repository.clear()
             self._refresh_pack_list()
-            messagebox.showinfo("Listo", "pack.json ha sido reseteado.")
+            QMessageBox.information(self, "Listo", "pack.json ha sido reseteado.")
         except OSError as exc:
-            messagebox.showerror("Error", f"No se pudo vaciar pack.json:\n{exc}")
+            QMessageBox.critical(self, "Error", f"No se pudo vaciar pack.json:\n{exc}")
 
     def _refresh_pack_list(self) -> None:
         self.pack_panel.render_pack(self.repository.load())
 
-    def _solicitar_parafraseo(
+    def _on_worker_paraphrase(
         self,
         indice: str,
         clave_osu: str,
         version_original: str,
         prefix_base: str,
-    ) -> str:
+    ) -> None:
         dialogo = ParafraseoDialog(
             self,
             prefix_base=prefix_base,
             version_original=version_original,
             max_len=MAX_OSU_FILENAME_LEN,
         )
-        self.wait_window(dialogo)
-        return dialogo.resultado if dialogo.resultado is not None else version_original
+        if dialogo.exec() == ParafraseoDialog.DialogCode.Accepted and dialogo.resultado:
+            reply = dialogo.resultado
+        else:
+            reply = version_original
+        if self._worker is not None:
+            self._worker.provide_paraphrase_reply(reply)
+
+    def _on_worker_finished(self, carpeta_generada: Path, cantidad: int) -> None:
+        self.progress_bar.hide()
+        self.btn_generate.setEnabled(True)
+        self.btn_generate.setText("⚡ Generar Pack de Mapas Final")
+        self._worker = None
+        QMessageBox.information(
+            self,
+            "¡Pack Generado con Éxito!",
+            f"Se generaron {cantidad} archivo(s) .osu correctamente en tu carpeta de canciones:\n"
+            f"{carpeta_generada.resolve()}",
+        )
+        self._refresh_pack_list()
+
+    def _on_worker_failed(self, error_msg: str) -> None:
+        self.progress_bar.hide()
+        self.btn_generate.setEnabled(True)
+        self.btn_generate.setText("⚡ Generar Pack de Mapas Final")
+        self._worker = None
+        QMessageBox.critical(
+            self, "Error al generar", f"Ocurrió un error inesperado al generar el pack:\n{error_msg}"
+        )
 
     def _generar_pack_final(self) -> None:
         init_file = self.base_panel.init_file
         if not init_file or not init_file.exists():
-            messagebox.showerror(
+            QMessageBox.critical(
+                self,
                 "Falta Archivo Base",
                 "Debes completar el Paso 1 y seleccionar una carpeta base válida que contenga init_file.",
             )
             return
 
         if not self.repository.load():
-            messagebox.showerror(
+            QMessageBox.critical(
+                self,
                 "Pack Vacío",
                 "Debes agregar al menos un mapa antes de generar el pack.",
             )
             return
 
-        try:
-            carpeta_generada, cantidad = generate_pack(
-                init_file,
-                repository=self.repository,
-                callback_parafraseo=self._solicitar_parafraseo,
-                default_creator=self.default_creator,
-                title_words=_TITLE_WORD_OPTIONS.get(self.seg_title_words.get(), 1),
-            )
-            messagebox.showinfo(
-                "¡Pack Generado con Éxito!",
-                f"Se generaron {cantidad} archivo(s) .osu correctamente en tu carpeta de canciones:\n"
-                f"{carpeta_generada.resolve()}",
-            )
-            self._refresh_pack_list()
-        except Exception as exc:
-            logger.exception("Error inesperado al generar el pack")
-            messagebox.showerror(
-                "Error al generar", f"Ocurrió un error inesperado al generar el pack:\n{exc}"
-            )
+        self.btn_generate.setEnabled(False)
+        self.btn_generate.setText("⏳ Generando Pack...")
+        self.progress_bar.show()
+
+        title_words = _TITLE_WORD_OPTIONS.get(self._current_title_words_label, 1)
+        self._worker = _GeneratePackWorker(
+            init_file=init_file,
+            repository=self.repository,
+            default_creator=self.default_creator,
+            title_words=title_words,
+        )
+        self._worker.paraphrase_requested.connect(self._on_worker_paraphrase)
+        self._worker.finished_ok.connect(self._on_worker_finished)
+        self._worker.failed.connect(self._on_worker_failed)
+        self._worker.start()
