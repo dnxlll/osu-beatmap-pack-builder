@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-APP_VERSION: str = "1.0.0"
+APP_VERSION: str = "1.0.1"
 GITHUB_REPO: str = "dnxlll/osu-beatmap-pack-builder"
 
 VALID_PATTERNS: tuple[str, ...] = ("DJ", "CJ", "SJ", "ANCHOR")
