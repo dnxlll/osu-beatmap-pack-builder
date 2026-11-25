@@ -1,11 +1,15 @@
 """Main PySide6 application window with 2-column split-view and background generation."""
 
 import logging
+import sys
+import tempfile
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QFileDialog,
     QFrame,
@@ -24,7 +28,7 @@ from osu_pack_builder.application.add_map import add_map_to_pack
 from osu_pack_builder.application.generate_pack import generate_pack
 from osu_pack_builder.application.remove_map import remove_map_from_pack
 from osu_pack_builder.application.update_map import clear_custom_versions, update_map_in_pack
-from osu_pack_builder.domain.models import MAX_OSU_FILENAME_LEN
+from osu_pack_builder.domain.models import APP_VERSION, MAX_OSU_FILENAME_LEN
 from osu_pack_builder.domain.naming import (
     build_version_name,
     detectar_patron_sugerido,
@@ -33,6 +37,12 @@ from osu_pack_builder.domain.naming import (
 )
 from osu_pack_builder.infrastructure.pack_repository import PackRepository
 from osu_pack_builder.infrastructure.songs_scanner import detect_songs_dir, list_song_folders
+from osu_pack_builder.infrastructure.updater import (
+    ReleaseInfo,
+    check_latest_release,
+    download_release_asset,
+    launch_windows_self_replace,
+)
 from osu_pack_builder.ui.components.add_map_panel import AddMapPanel
 from osu_pack_builder.ui.components.base_map_panel import BaseMapPanel
 from osu_pack_builder.ui.components.pack_list_panel import PackListPanel
@@ -108,6 +118,49 @@ class _GeneratePackWorker(QThread):
             self.failed.emit(str(exc))
 
 
+
+class _CheckUpdateWorker(QThread):
+    """Background worker checking GitHub Releases for a newer version."""
+
+    result_ready = Signal(object, bool, str)
+
+    def __init__(self, interactive: bool = False) -> None:
+        super().__init__()
+        self._interactive = interactive
+
+    def run(self) -> None:
+        try:
+            info = check_latest_release()
+            self.result_ready.emit(info, self._interactive, "")
+        except Exception as exc:
+            logger.debug("No se pudo comprobar actualizaciones: %s", exc)
+            self.result_ready.emit(None, self._interactive, str(exc))
+
+
+class _DownloadUpdateWorker(QThread):
+    """Background worker downloading the new .exe release asset."""
+
+    progress_changed = Signal(int, int)
+    finished_ok = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, download_url: str, dest_path: Path) -> None:
+        super().__init__()
+        self._download_url = download_url
+        self._dest_path = dest_path
+
+    def run(self) -> None:
+        try:
+            out = download_release_asset(
+                self._download_url,
+                self._dest_path,
+                on_progress=lambda d, t: self.progress_changed.emit(d, t),
+            )
+            self.finished_ok.emit(out)
+        except Exception as exc:
+            logger.exception("Error descargando actualización")
+            self.failed.emit(str(exc))
+
 class BeatmapPackApp(QMainWindow):
     """Main PySide6 window orchestrating the 2-column split-view beatmap pack workflow."""
 
@@ -125,10 +178,14 @@ class BeatmapPackApp(QMainWindow):
         self.carpetas_songs: list[Path] = []
         self._current_title_words_label: str = "1 palabra"
         self._worker: _GeneratePackWorker | None = None
+        self._available_release: ReleaseInfo | None = None
+        self._update_check_worker: _CheckUpdateWorker | None = None
+        self._update_dl_worker: _DownloadUpdateWorker | None = None
 
         self._cargar_indice_songs()
         self._build_layout()
         self._refresh_pack_list()
+        QTimer.singleShot(1200, lambda: self._start_update_check(interactive=False))
 
     def _cargar_indice_songs(self) -> None:
         try:
@@ -154,6 +211,7 @@ class BeatmapPackApp(QMainWindow):
             songs_dir=self.songs_dir,
             map_count=len(self.carpetas_songs),
             on_change_songs=self._cambiar_directorio_songs,
+            on_check_or_install_update=self._on_update_button_clicked,
         )
         root.addWidget(self.header)
 
@@ -424,6 +482,7 @@ class BeatmapPackApp(QMainWindow):
             f"{carpeta_generada.resolve()}",
         )
         self._refresh_pack_list()
+        QTimer.singleShot(1200, lambda: self._start_update_check(interactive=False))
 
     def _on_worker_failed(self, error_msg: str) -> None:
         self.progress_bar.hide()
@@ -467,3 +526,101 @@ class BeatmapPackApp(QMainWindow):
         self._worker.finished_ok.connect(self._on_worker_finished)
         self._worker.failed.connect(self._on_worker_failed)
         self._worker.start()
+
+    def _start_update_check(self, interactive: bool) -> None:
+        if self._update_check_worker is not None and self._update_check_worker.isRunning():
+            return
+        if interactive:
+            self.header.btn_update.setEnabled(False)
+            self.header.btn_update.setText("⏳ Buscando...")
+        self._update_check_worker = _CheckUpdateWorker(interactive=interactive)
+        self._update_check_worker.result_ready.connect(self._on_update_check_done)
+        self._update_check_worker.start()
+
+    def _on_update_check_done(
+        self,
+        info: ReleaseInfo | None,
+        interactive: bool,
+        error_msg: str,
+    ) -> None:
+        self.header.btn_update.setEnabled(True)
+        if info is not None:
+            self._available_release = info
+            self.header.set_update_available(info.version)
+            if interactive:
+                self._prompt_install_update(info)
+            return
+
+        self.header.btn_update.setText("↻ Buscar actualización")
+        if interactive:
+            if error_msg:
+                QMessageBox.warning(
+                    self,
+                    "Error al buscar actualización",
+                    f"No se pudo conectar con GitHub:\n{error_msg}",
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Sin actualizaciones",
+                    f"Ya tienes la versión más reciente (v{APP_VERSION}).",
+                )
+
+    def _on_update_button_clicked(self) -> None:
+        if self._available_release is not None:
+            self._prompt_install_update(self._available_release)
+        else:
+            self._start_update_check(interactive=True)
+
+    def _prompt_install_update(self, info: ReleaseInfo) -> None:
+        notes_preview = f"\n\nNotas:\n{info.notes[:400]}" if info.notes else ""
+        reply = QMessageBox.question(
+            self,
+            f"Nueva versión v{info.version}",
+            f"Está disponible la versión v{info.version} (tienes v{APP_VERSION}).{notes_preview}\n\n"
+            "¿Deseas descargar e instalar la actualización ahora?",
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        if not getattr(sys, "frozen", False) or not info.download_url:
+            QDesktopServices.openUrl(QUrl(info.html_url))
+            return
+
+        dest = Path(tempfile.gettempdir()) / "osu-beatmap-pack-builder-update.exe"
+        self.header.btn_update.setEnabled(False)
+        self.header.btn_update.setText("⬇ Descargando...")
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.show()
+
+        self._update_dl_worker = _DownloadUpdateWorker(info.download_url, dest)
+        self._update_dl_worker.progress_changed.connect(self._on_update_download_progress)
+        self._update_dl_worker.finished_ok.connect(self._on_update_download_finished)
+        self._update_dl_worker.failed.connect(self._on_update_download_failed)
+        self._update_dl_worker.start()
+
+    def _on_update_download_progress(self, downloaded: int, total: int) -> None:
+        if total > 0:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(int(downloaded * 100 / total))
+        else:
+            self.progress_bar.setRange(0, 0)
+
+    def _on_update_download_finished(self, new_exe: Path) -> None:
+        self.progress_bar.hide()
+        self.progress_bar.setRange(0, 0)
+        launch_windows_self_replace(new_exe)
+        QApplication.quit()
+
+    def _on_update_download_failed(self, error_msg: str) -> None:
+        self.progress_bar.hide()
+        self.progress_bar.setRange(0, 0)
+        self.header.btn_update.setEnabled(True)
+        if self._available_release is not None:
+            self.header.set_update_available(self._available_release.version)
+        QMessageBox.critical(
+            self,
+            "Error al descargar actualización",
+            f"No se pudo descargar la nueva versión:\n{error_msg}",
+        )

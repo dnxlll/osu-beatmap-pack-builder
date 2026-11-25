@@ -2,6 +2,9 @@
 
 from dataclasses import dataclass
 
+APP_VERSION: str = "1.0.0"
+GITHUB_REPO: str = "dnxlll/osu-beatmap-pack-builder"
+
 VALID_PATTERNS: tuple[str, ...] = ("DJ", "CJ", "SJ", "ANCHOR")
 AUDIO_EXTENSIONS: tuple[str, ...] = (".mp3", ".ogg", ".wav")
 IMAGE_EXTENSIONS: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp")
