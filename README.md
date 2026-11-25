@@ -78,3 +78,9 @@ pytest -v
 ruff check .
 lint-imports
 ```
+
+---
+
+## Licencia
+
+Este proyecto está bajo la licencia **GNU GPL v3.0** — consulta el archivo [LICENSE](LICENSE) para más detalles.

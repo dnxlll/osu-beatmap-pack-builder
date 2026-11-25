@@ -4,7 +4,7 @@ import logging
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFileDialog,
@@ -234,6 +234,11 @@ class BeatmapPackApp(QMainWindow):
         self.btn_generate.setStyleSheet("font-size: 15px; font-weight: bold;")
         self.btn_generate.clicked.connect(self._generar_pack_final)
         right_col.addWidget(self.btn_generate)
+
+        lbl_credit = QLabel("Creado por DanExl")
+        lbl_credit.setAlignment(Qt.AlignmentFlag.AlignRight)
+        lbl_credit.setStyleSheet("color: #6B7280; font-size: 11px;")
+        right_col.addWidget(lbl_credit)
 
         workspace.addLayout(right_col, 1)
 
