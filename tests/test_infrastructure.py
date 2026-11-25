@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from osu_pack_builder.infrastructure.app_paths import get_app_data_dir, get_log_file, get_pack_file
+from osu_pack_builder.infrastructure.app_paths import (
+    get_app_data_dir,
+    get_bundled_resource,
+    get_log_file,
+    get_marathon_audio_path,
+    get_pack_file,
+)
 from osu_pack_builder.infrastructure.media_processor import copy_audio, load_thumbnail, optimize_background
 from osu_pack_builder.infrastructure.pack_repository import PackRepository
 from osu_pack_builder.infrastructure.songs_scanner import filter_song_folders, list_song_folders
@@ -104,3 +110,14 @@ class TestAppPaths:
         data_dir = get_app_data_dir("test-osu-pack")
         assert data_dir == tmp_path / "test-osu-pack"
         assert data_dir.exists()
+
+    def test_bundled_resource_resolves_meipass_when_frozen(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        assert get_marathon_audio_path().name == "MARATHON.mp3"
+
+        monkeypatch.setattr("sys.frozen", True, raising=False)
+        monkeypatch.setattr("sys._MEIPASS", str(tmp_path), raising=False)
+        assert get_bundled_resource("marathon/MARATHON.mp3") == tmp_path / "marathon/MARATHON.mp3"

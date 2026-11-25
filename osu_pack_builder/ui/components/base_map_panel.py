@@ -1,5 +1,6 @@
 """Step 1 panel: base pack folder and init_file selection."""
 
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from osu_pack_builder.infrastructure.app_paths import get_marathon_audio_path
 from osu_pack_builder.infrastructure.songs_scanner import filter_song_folders
 from osu_pack_builder.ui.theme import COLOR_ERROR_TEXT, COLOR_SUCCESS
 
@@ -41,9 +43,20 @@ class BaseMapPanel(QFrame):
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(8)
 
+        header_row = QHBoxLayout()
         title = QLabel("1. Carpeta Base (init_file)")
         title.setStyleSheet("font-size: 15px; font-weight: bold;")
-        layout.addWidget(title)
+        header_row.addWidget(title)
+        header_row.addStretch()
+
+        btn_marathon = QPushButton("⬇ MARATHON.mp3 (10m)")
+        btn_marathon.setToolTip(
+            "Guarda el audio base de 10 minutos para crear tu mapa init_file en osu!"
+        )
+        btn_marathon.setStyleSheet("padding: 3px 8px; font-size: 11px;")
+        btn_marathon.clicked.connect(self._descargar_marathon)
+        header_row.addWidget(btn_marathon)
+        layout.addLayout(header_row)
 
         search_row = QHBoxLayout()
         search_row.setSpacing(6)
@@ -156,3 +169,33 @@ class BaseMapPanel(QFrame):
                 self.lbl_status.setText(f"✓ Base seleccionada: {self.init_file.name}")
                 self.lbl_status.setStyleSheet(f"color: {COLOR_SUCCESS}; font-weight: bold;")
                 break
+
+    def _descargar_marathon(self) -> None:
+        src = get_marathon_audio_path()
+        if not src.exists():
+            QMessageBox.warning(
+                self,
+                "Archivo no disponible",
+                f"No se encontró el audio base en:\n{src}",
+            )
+            return
+
+        dest, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar audio base MARATHON.mp3",
+            "MARATHON.mp3",
+            "Audio MP3 (*.mp3)",
+        )
+        if not dest:
+            return
+
+        try:
+            shutil.copyfile(src, dest)
+            QMessageBox.information(
+                self,
+                "Audio guardado",
+                f"MARATHON.mp3 guardado en:\n{dest}\n\n"
+                "Arrástralo a osu! para crear la dificultad base (init_file).",
+            )
+        except OSError as exc:
+            QMessageBox.critical(self, "Error al guardar", f"No se pudo guardar el archivo:\n{exc}")

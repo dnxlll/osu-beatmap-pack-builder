@@ -1,4 +1,4 @@
-"""Application data path resolution for both source and frozen (.exe) runs."""
+"""Application data and bundled resource path resolution for source and frozen (.exe) runs."""
 
 import os
 import sys
@@ -18,6 +18,19 @@ def get_app_data_dir(app_name: str = APP_DIR_NAME) -> Path:
         data_dir.mkdir(parents=True, exist_ok=True)
         return data_dir
     return Path(__file__).resolve().parents[2]
+
+
+def get_bundled_resource(relative_path: str) -> Path:
+    """Resolve a read-only bundled asset path in dev or PyInstaller (_MEIPASS) mode."""
+    meipass = getattr(sys, "_MEIPASS", None)
+    if getattr(sys, "frozen", False) and meipass:
+        return Path(meipass) / relative_path
+    return Path(__file__).resolve().parents[2] / relative_path
+
+
+def get_marathon_audio_path() -> Path:
+    """Return the path to the bundled 10-minute MARATHON.mp3 template audio."""
+    return get_bundled_resource("marathon/MARATHON.mp3")
 
 
 def get_pack_file() -> Path:
