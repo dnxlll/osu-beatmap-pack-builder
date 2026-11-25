@@ -1,6 +1,7 @@
 """GitHub Releases update checker, downloader, and Windows self-updater."""
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -115,6 +116,8 @@ def launch_windows_self_replace(new_exe: Path, current_exe: Path | None = None) 
     bat_path = Path(tempfile.gettempdir()) / "osu_beatmap_pack_update.bat"
     script = (
         "@echo off\n"
+        'set "_MEIPASS="\n'
+        'set "_MEIPASS2="\n'
         "timeout /t 2 /nobreak >nul\n"
         f'move /y "{new_exe}" "{target}"\n'
         f'start "" "{target}"\n'
@@ -122,11 +125,16 @@ def launch_windows_self_replace(new_exe: Path, current_exe: Path | None = None) 
     )
     bat_path.write_text(script, encoding="utf-8")
 
+    clean_env = os.environ.copy()
+    clean_env.pop("_MEIPASS", None)
+    clean_env.pop("_MEIPASS2", None)
+
     creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
         subprocess, "DETACHED_PROCESS", 0
     )
     subprocess.Popen(
         ["cmd.exe", "/c", str(bat_path)],
+        env=clean_env,
         creationflags=creation_flags,
         close_fds=True,
     )
