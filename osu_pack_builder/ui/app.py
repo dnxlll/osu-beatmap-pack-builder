@@ -287,7 +287,7 @@ class BeatmapPackApp(QMainWindow):
         patron_para_guardar = normalize_pattern(patron_actual)
 
         try:
-            indice, pack = add_map_to_pack(
+            _, pack = add_map_to_pack(
                 carpeta,
                 osu_elegido,
                 repository=self.repository,
@@ -296,7 +296,7 @@ class BeatmapPackApp(QMainWindow):
             )
             tag_msg = f" [{patron_para_guardar}]" if patron_para_guardar else ""
             QMessageBox.information(
-                self, "Éxito", f"Dificultad{tag_msg} agregada al pack con índice '{indice}'."
+                self, "Éxito", f"Dificultad{tag_msg} agregada al pack."
             )
             self.pack_panel.render_pack(pack)
             return True
@@ -378,16 +378,16 @@ class BeatmapPackApp(QMainWindow):
 
     def _handle_clear_pack(self) -> None:
         reply = QMessageBox.question(
-            self, "Confirmar", "¿Seguro que deseas vaciar pack.json?"
+            self, "Confirmar", "¿Seguro que deseas vaciar el pack actual?"
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
             self.repository.clear()
             self._refresh_pack_list()
-            QMessageBox.information(self, "Listo", "pack.json ha sido reseteado.")
+            QMessageBox.information(self, "Listo", "El pack ha sido vaciado.")
         except OSError as exc:
-            QMessageBox.critical(self, "Error", f"No se pudo vaciar pack.json:\n{exc}")
+            QMessageBox.critical(self, "Error", f"No se pudo vaciar el pack:\n{exc}")
 
     def _refresh_pack_list(self) -> None:
         self.pack_panel.render_pack(self.repository.load())
